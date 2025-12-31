@@ -5,17 +5,27 @@ import { prisma } from '@/lib/db'
 import { nanoid } from 'nanoid'
 
 // GET /api/petitions - List petitions
+// ?creatorId=xxx - Get petitions by creator
+// ?category=xxx - Filter by category
+// ?status=xxx - Filter by status (default: ACTIVE)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
+    const creatorId = searchParams.get('creatorId')
     const status = searchParams.get('status') || 'ACTIVE'
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
     
-    const where: Record<string, unknown> = {
-      status,
-      visibility: 'PUBLIC',
+    const where: Record<string, unknown> = {}
+    
+    // If filtering by creator, show all their petitions regardless of status/visibility
+    if (creatorId) {
+      where.creatorId = creatorId
+    } else {
+      // Public listing - only show active public petitions
+      where.status = status
+      where.visibility = 'PUBLIC'
     }
     
     if (category) {

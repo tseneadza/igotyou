@@ -116,17 +116,53 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/signatures?petitionId=xxx - Get signatures for a petition
+// GET /api/signatures - Get signatures for a petition or user
+// ?petitionId=xxx - Get signatures for a petition
+// ?userId=xxx - Get petitions signed by a user
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const petitionId = searchParams.get('petitionId')
+    const userId = searchParams.get('userId')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
     
+    // If userId is provided, return petitions signed by that user
+    if (userId) {
+      const signatures = await prisma.signature.findMany({
+        where: { userId },
+        include: {
+          petition: {
+            include: {
+              _count: { select: { signatures: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      })
+      
+      const total = await prisma.signature.count({
+        where: { userId },
+      })
+      
+      return NextResponse.json({
+        success: true,
+        data: signatures,
+        pagination: {
+          total,
+          limit,
+          offset,
+          hasMore: offset + signatures.length < total,
+        },
+      })
+    }
+    
+    // Otherwise, get signatures for a petition
     if (!petitionId) {
       return NextResponse.json(
-        { success: false, error: 'Petition ID is required' },
+        { success: false, error: 'Petition ID or User ID is required' },
         { status: 400 }
       )
     }

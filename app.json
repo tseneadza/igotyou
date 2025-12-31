@@ -1,0 +1,29 @@
+{
+  "id": "igotyou",
+  "name": "IGotYou",
+  "description": "AI-powered workplace petition platform for employee advocacy",
+  "version": "0.1.0",
+  "type": "web",
+  "icon": "✊",
+  "category": "tools",
+  "web": {
+    "enabled": true,
+    "entry": "package.json",
+    "port": 3000,
+    "framework": "nextjs",
+    "requirements": "package.json",
+    "venv": "",
+    "command": ["npm", "run", "dev"]
+  },
+  "desktop": {
+    "enabled": false
+  },
+  "tags": [
+    "petitions",
+    "workplace",
+    "advocacy",
+    "ai",
+    "nextjs",
+    "typescript"
+  ]
+}

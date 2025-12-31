@@ -1,0 +1,219 @@
+// IGotYou - Workplace Petition Platform
+// PostgreSQL database schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  emailVerified     DateTime?
+  name              String?
+  image             String?
+  verificationTier  VerificationTier  @default(BASIC)
+  
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  petitionsCreated  Petition[]        @relation("PetitionCreator")
+  signatures        Signature[]
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// PETITIONS
+// ============================================
+
+model Petition {
+  id              String          @id @default(cuid())
+  slug            String          @unique
+  title           String
+  description     String          @db.Text
+  target          String          // Who is being petitioned (CEO, HR, Board, etc.)
+  targetEmail     String?         // Optional: direct email to target
+  company         String?         // Company name (optional for public petitions)
+  category        PetitionCategory
+  goal            Int             // Signature goal
+  status          PetitionStatus  @default(ACTIVE)
+  visibility      Visibility      @default(PUBLIC)
+  
+  // AI-related fields
+  aiDraftHistory  Json?           // Stores conversation with AI assistant
+  successScore    Float?          // AI-predicted success probability (0-1)
+  
+  // QR tracking
+  qrScans         Int             @default(0)
+  
+  // Creator relation
+  creatorId       String
+  creator         User            @relation("PetitionCreator", fields: [creatorId], references: [id])
+  
+  // Related data
+  signatures      Signature[]
+  updates         PetitionUpdate[]
+  responses       TargetResponse[]
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  closedAt        DateTime?
+  
+  // Full-text search
+  searchVector    String?         @db.Text
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([company])
+  @@index([category])
+  @@map("petitions")
+}
+
+model PetitionUpdate {
+  id          String   @id @default(cuid())
+  petitionId  String
+  petition    Petition @relation(fields: [petitionId], references: [id], onDelete: Cascade)
+  title       String
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([petitionId])
+  @@map("petition_updates")
+}
+
+model TargetResponse {
+  id          String   @id @default(cuid())
+  petitionId  String
+  petition    Petition @relation(fields: [petitionId], references: [id], onDelete: Cascade)
+  responder   String   // Name/title of who responded
+  content     String   @db.Text
+  verified    Boolean  @default(false) // Has the response been verified as authentic?
+  createdAt   DateTime @default(now())
+
+  @@index([petitionId])
+  @@map("target_responses")
+}
+
+// ============================================
+// SIGNATURES
+// ============================================
+
+model Signature {
+  id               String           @id @default(cuid())
+  petitionId       String
+  petition         Petition         @relation(fields: [petitionId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User             @relation(fields: [userId], references: [id])
+  
+  comment          String?          @db.Text  // Optional reason for signing
+  isAnonymous      Boolean          @default(false)
+  verifiedEmployee Boolean          @default(false)
+  
+  // Tracking
+  source           SignatureSource  @default(DIRECT)
+  
+  createdAt        DateTime         @default(now())
+
+  @@unique([petitionId, userId]) // One signature per user per petition
+  @@index([petitionId])
+  @@index([userId])
+  @@map("signatures")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum VerificationTier {
+  BASIC              // Email verified only
+  VERIFIED_EMAIL     // Email + phone verified
+  VERIFIED_EMPLOYEE  // Verified as employee of company
+  ANONYMIZED_VERIFIED // Third-party verified but name hidden
+}
+
+enum PetitionStatus {
+  DRAFT     // Not yet published
+  ACTIVE    // Accepting signatures
+  CLOSED    // No longer accepting signatures
+  VICTORY   // Goal achieved or change made
+  ARCHIVED  // Removed from public view
+}
+
+enum Visibility {
+  PUBLIC    // Anyone can view and sign
+  PRIVATE   // Only people with link can view
+  INTERNAL  // Only verified employees can view
+}
+
+enum PetitionCategory {
+  PAY_EQUITY
+  BENEFITS
+  WORKPLACE_SAFETY
+  REMOTE_WORK
+  LAYOFFS
+  HARASSMENT
+  DISCRIMINATION
+  UNION
+  POLICY_CHANGE
+  ENVIRONMENTAL
+  OTHER
+}
+
+enum SignatureSource {
+  DIRECT    // Signed directly on site
+  QR_CODE   // Scanned QR code
+  SHARE     // Clicked shared link
+  EMAIL     // Clicked link in email
+}

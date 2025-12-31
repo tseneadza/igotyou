@@ -1,0 +1,391 @@
+---
+description: IGotYou project conventions, patterns, and lessons learned
+globs: 
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "prisma/**"
+alwaysApply: false
+---
+
+# IGotYou Project Rules
+
+## Project Overview
+IGotYou is a Next.js 14 workplace petition platform with PostgreSQL, Prisma ORM, NextAuth.js authentication, and OpenAI integration.
+
+---
+
+## Dependency Management
+
+**This is a Node.js/TypeScript project, NOT Python.**
+
+| Tool | Purpose |
+|------|---------|
+| `npm install` | Install dependencies |
+| `node_modules/` | Dependencies folder (like venv for Python) |
+| `package.json` | Dependency manifest |
+| `package-lock.json` | Version lock file |
+
+**Do NOT create a `venv/` folder** - that's for Python projects only.
+
+---
+
+## Technology Versions (Stable)
+
+Use these stable versions to avoid compatibility issues:
+
+```json
+{
+  "prisma": "^5.22.0",
+  "@prisma/client": "^5.22.0",
+  "next-auth": "^4.24.7",
+  "@next-auth/prisma-adapter": "^1.0.7",
+  "next": "^15.0.0"
+}
+```
+
+**Do NOT use**:
+- Prisma 6.x or 7.x (breaking changes with schema.prisma)
+- next-auth 5.x beta (runtime errors with PrismaAdapter)
+
+---
+
+## Authentication Pattern
+
+### NextAuth v4 Configuration
+Location: `src/lib/auth.ts`
+
+```typescript
+import { NextAuthOptions } from 'next-auth'
+import { PrismaAdapter } from '@next-auth/prisma-adapter'
+import GoogleProvider from 'next-auth/providers/google'
+import { prisma } from './db'
+
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    }),
+  ],
+  session: { strategy: 'jwt' },
+  // ... rest of config
+}
+```
+
+### API Route Handler
+Location: `src/app/api/auth/[...nextauth]/route.ts`
+
+```typescript
+import NextAuth from 'next-auth'
+import { authOptions } from '@/lib/auth'
+
+const handler = NextAuth(authOptions)
+export { handler as GET, handler as POST }
+```
+
+### Getting Session in API Routes
+```typescript
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions)
+  const userId = session?.user?.id
+  
+  // Fall back to demo user in development
+  if (!userId && process.env.NODE_ENV === 'development') {
+    userId = 'demo-user-id'
+  }
+}
+```
+
+---
+
+## Prisma Patterns
+
+### Client Singleton
+Location: `src/lib/db.ts`
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient }
+
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  })
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+```
+
+### Schema Conventions
+- Use `@@map("table_name")` for PostgreSQL snake_case table names
+- Use `@db.Text` for long text fields
+- Include `createdAt` and `updatedAt` on all models
+- Use enums for fixed value sets
+
+---
+
+## Package Import Gotchas
+
+### react-qr-code
+```typescript
+// ✅ Correct
+import { QRCode } from 'react-qr-code'
+
+// ❌ Wrong - QRCodeSVG doesn't exist
+import { QRCodeSVG } from 'react-qr-code'
+```
+
+### date-fns
+```typescript
+import { formatDistanceToNow } from 'date-fns'
+// Use with: formatDistanceToNow(new Date(date), { addSuffix: true })
+```
+
+---
+
+## API Response Pattern
+
+```typescript
+// Success
+return NextResponse.json({
+  success: true,
+  data: result,
+}, { status: 200 })
+
+// Error
+return NextResponse.json({
+  success: false,
+  error: 'User-friendly error message',
+}, { status: 400 })
+```
+
+---
+
+## Environment Variables
+
+Required in `.env`:
+```
+DATABASE_URL="postgresql://..."
+NEXTAUTH_SECRET="generate-with-openssl-rand-base64-32"
+NEXTAUTH_URL="http://localhost:3000"
+GOOGLE_CLIENT_ID="from-google-cloud-console"
+GOOGLE_CLIENT_SECRET="from-google-cloud-console"
+OPENAI_API_KEY="sk-..."
+```
+
+---
+
+## Google OAuth Setup
+
+Redirect URI to add in Google Cloud Console:
+```
+http://localhost:3000/api/auth/callback/google
+```
+
+For production, also add:
+```
+https://your-domain.com/api/auth/callback/google
+```
+
+---
+
+## Database Commands
+
+```bash
+# Generate client after schema changes
+npx prisma generate
+
+# Create migration
+npx prisma migrate dev --name description
+
+# Reset database (caution: deletes data)
+npx prisma migrate reset
+
+# View data
+npx prisma studio
+```
+
+---
+
+## Common Issues & Solutions
+
+### Foreign Key Constraint Errors
+- Ensure referenced user exists in database
+- Use demo user fallback in development
+- Check that `creatorId` points to valid user
+
+### OAuth Redirect Mismatch
+- Verify exact URI in Google Cloud Console
+- Use `http://` for localhost (not `https://`)
+- No trailing slashes
+
+### Component "undefined" Errors
+- Check package export names (e.g., `QRCode` not `QRCodeSVG`)
+- Verify all imports are from installed packages
+- Run `npm install` if packages missing
+
+---
+
+## File Organization
+
+```
+src/
+├── app/
+│   ├── api/           # API routes
+│   ├── (routes)/      # Page routes
+│   └── layout.tsx     # Root layout with Providers
+├── components/
+│   ├── ui/            # Reusable UI (Button, Input, etc.)
+│   ├── petition/      # Petition-specific components
+│   └── ai/            # AI feature components
+├── lib/
+│   ├── auth.ts        # NextAuth config
+│   ├── db.ts          # Prisma client
+│   └── ai.ts          # OpenAI utilities
+└── types/
+    └── index.ts       # TypeScript types & enums
+```
+
+---
+
+## Single Responsibility Principle (SRP)
+
+All code must follow SRP - each module/function/component should have ONE reason to change.
+
+### File Organization by Responsibility
+
+```
+lib/
+├── ai/
+│   ├── client.ts        # OpenAI client singleton
+│   ├── draft.ts         # Draft conversation logic
+│   ├── predict.ts       # Success prediction
+│   └── strategy.ts      # Strategy tips
+├── services/
+│   ├── petition.ts      # Petition business logic
+│   └── signature.ts     # Signature business logic
+```
+
+### Component Rules
+- **One component = One visual responsibility**
+- Extract sub-components when a component handles multiple states
+- Container components orchestrate; presentational components render
+
+### Function Rules
+- Functions should do ONE thing
+- If you can describe it with "and", split it
+- Max ~20 lines per function (guideline, not hard rule)
+
+### Bad vs Good Examples
+
+```typescript
+// ❌ BAD: Does too much
+async function handlePetitionSubmit(data) {
+  validateData(data)           // validation
+  const slug = generateSlug()  // slug generation  
+  await saveToDB(data)         // persistence
+  await sendEmail()            // notification
+  trackAnalytics()             // analytics
+}
+
+// ✅ GOOD: Single responsibility
+async function createPetition(data: ValidatedPetitionData) {
+  return await petitionRepository.create(data)
+}
+
+// Orchestration happens at a higher level
+async function handlePetitionSubmit(data) {
+  const validated = validatePetitionData(data)
+  const petition = await createPetition(validated)
+  await notifyCreator(petition)
+  return petition
+}
+```
+
+---
+
+## Testing Requirements
+
+All new code must include unit tests. Use **Vitest + Testing Library**.
+
+### Test File Location
+- Tests live next to source files: `Component.tsx` → `Component.test.tsx`
+- Or in `__tests__/` folder for complex modules
+
+### Running Tests
+```bash
+npm test              # Run all tests
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
+```
+
+### Test Structure (AAA Pattern)
+```typescript
+import { describe, it, expect, vi } from 'vitest'
+
+describe('PetitionService', () => {
+  describe('createPetition', () => {
+    it('should create petition with valid data', async () => {
+      // Arrange
+      const data = { title: 'Test', description: '...' }
+      
+      // Act
+      const result = await createPetition(data)
+      
+      // Assert
+      expect(result.slug).toBeDefined()
+      expect(result.title).toBe('Test')
+    })
+
+    it('should throw on missing required fields', async () => {
+      // Arrange
+      const invalidData = { title: '' }
+      
+      // Act & Assert
+      await expect(createPetition(invalidData))
+        .rejects.toThrow('Title is required')
+    })
+  })
+})
+```
+
+### What to Test
+| Type | Test |
+|------|------|
+| **Utilities/Helpers** | Pure function inputs → outputs |
+| **Services** | Business logic, edge cases |
+| **Components** | Renders correctly, user interactions |
+| **API Routes** | Request → response, error handling |
+
+### Mocking
+```typescript
+import { vi } from 'vitest'
+
+// Mock a module
+vi.mock('@/lib/db', () => ({
+  prisma: {
+    petition: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
+  },
+}))
+
+// Mock fetch
+global.fetch = vi.fn()
+```
+
+---
+
+## Changelog
+
+Always update `CHANGELOG.md` when:
+- Fixing bugs
+- Adding features
+- Changing dependencies
+- Resolving configuration issues

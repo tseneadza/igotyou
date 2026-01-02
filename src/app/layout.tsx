@@ -1,16 +1,20 @@
 import type { Metadata } from 'next'
-import { Inter, Space_Grotesk } from 'next/font/google'
+import { Instrument_Sans, Archivo_Black } from 'next/font/google'
 import { Providers } from '@/components/Providers'
 import './globals.css'
 
-const inter = Inter({
-  variable: '--font-inter',
+const instrumentSans = Instrument_Sans({
+  variable: '--font-instrument',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
 })
 
-const spaceGrotesk = Space_Grotesk({
-  variable: '--font-space-grotesk',
+const archivoBlack = Archivo_Black({
+  variable: '--font-clash',
   subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
@@ -31,7 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth">
-      <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
+      <body className={`${instrumentSans.variable} ${archivoBlack.variable} font-sans antialiased`}>
         <Providers>
         {children}
         </Providers>

@@ -4,16 +4,20 @@
   "description": "AI-powered workplace petition platform for employee advocacy",
   "version": "0.1.0",
   "type": "web",
-  "icon": "✊",
+  "icon": "\u270a",
   "category": "tools",
   "web": {
     "enabled": true,
     "entry": "package.json",
-    "port": 3000,
+    "port": 3001,
     "framework": "nextjs",
     "requirements": "package.json",
     "venv": "",
-    "command": ["npm", "run", "dev"]
+    "command": [
+      "npm",
+      "run",
+      "dev"
+    ]
   },
   "desktop": {
     "enabled": false
@@ -25,5 +29,27 @@
     "ai",
     "nextjs",
     "typescript"
+  ],
+  "scripts": [
+    {
+      "name": "next-env.d",
+      "path": "next-env.d.ts",
+      "description": "Script: next-env.d.ts"
+    },
+    {
+      "name": "next.config",
+      "path": "next.config.ts",
+      "description": "Script: next.config.ts"
+    },
+    {
+      "name": "vitest.config",
+      "path": "vitest.config.ts",
+      "description": "Script: vitest.config.ts"
+    },
+    {
+      "name": "vitest.setup",
+      "path": "vitest.setup.ts",
+      "description": "Script: vitest.setup.ts"
+    }
   ]
 }
